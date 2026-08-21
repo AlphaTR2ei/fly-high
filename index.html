@@ -1,0 +1,2229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Escape: Combo Rush</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            background-color: #000000;
+            max-height: 100vh;
+            max-width: 100vw;
+            object-fit: contain;
+            box-shadow: 0 0 20px rgba(80, 220, 255, 0.2);
+        }
+    </style>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050816">
+</head>
+<body>
+
+<canvas id="gameCanvas" width="480" height="854"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// -----------------------------
+// SETTINGS
+// -----------------------------
+const WIDTH = 480;
+const HEIGHT = 854;
+const FPS = 60;
+const TITLE = "Space Escape: Combo Rush";
+const BOSS_INTERVAL_SECONDS = 90;
+const FIRST_BOSS_SECONDS = 45; 
+
+// --- AUDIO PATHS ---
+const BGM_SRC = "arka_plan_muzigi.mp3"; 
+const LASER_SFX_SRC = "lazer_sesi.mp3"; 
+const BULLET_SFX_SRC = "mermi_sesi.mp3"; 
+const COIN_SFX_SRC = "coin_sesi.mp3";       
+const BOMB_SFX_SRC = "bomba_sesi.mp3";       
+const SHIELD_SFX_SRC = "kalkan_sesi.mp3";    
+const HEALTH_SFX_SRC = "can_sesi.mp3";       
+const EXPLODE_SFX_SRC = "patlama_sesi.mp3";  
+const METEOR_HIT_SFX_SRC = "meteor_sesi.mp3"; 
+const GAMEOVER_SFX_SRC = "gameover_sesi.mp3";
+const CLICK_SFX_SRC = "buton_sesi.mp3";      
+
+// Fonts
+const FONT_SMALL = "bold 18px Arial";
+const FONT = "bold 24px Arial";
+const FONT_BIG = "bold 48px Arial";
+const FONT_HUGE = "bold 68px Arial";
+
+// Colors
+const WHITE = "rgb(245, 248, 255)";
+const CYAN = "rgb(80, 220, 255)";
+const BLUE = "rgb(70, 120, 255)";
+const RED = "rgb(245, 65, 80)";
+const ORANGE = "rgb(255, 155, 50)";
+const YELLOW = "rgb(255, 235, 90)";
+const PURPLE = "rgb(180, 90, 255)";
+const GREEN = "rgb(50, 255, 80)";
+const METEOR_GRAY = "rgb(130, 130, 140)";
+const METEOR_DARK = "rgb(70, 70, 80)";
+const PANEL = "rgb(13, 19, 42)";
+
+// Custom Neon Colors
+const NEON_CYAN = "rgb(0, 255, 255)";
+const NEON_CYAN_DARK = "rgb(0, 100, 100)";
+const NEON_PINK = "rgb(255, 20, 147)";
+const NEON_PINK_DARK = "rgb(100, 0, 50)";
+const NEON_YELLOW = "rgb(255, 255, 0)";
+const NEON_YELLOW_DARK = "rgb(100, 100, 0)";
+
+// -----------------------------
+// SECURE AUDIO OBJECTS
+// -----------------------------
+let bgMusic = null;
+let laserMusic = null;
+let bulletSoundTemplate = null;
+let coinSoundTemplate = null;
+let bombSoundTemplate = null;
+let shieldSoundTemplate = null;
+let healthSoundTemplate = null;
+let explodeSoundTemplate = null;
+let meteorSoundTemplate = null;
+let gameoverSoundTemplate = null;
+let clickSoundTemplate = null;
+
+try {
+    bgMusic = new Audio(BGM_SRC);
+    bgMusic.loop = true;
+    bgMusic.volume = 0.25;
+
+    laserMusic = new Audio(LASER_SFX_SRC);
+    laserMusic.loop = true;
+    laserMusic.volume = 0.3;
+
+    bulletSoundTemplate = new Audio(BULLET_SFX_SRC);
+    bulletSoundTemplate.volume = 0.25;
+
+    coinSoundTemplate = new Audio(COIN_SFX_SRC);
+    coinSoundTemplate.volume = 0.3;
+
+    bombSoundTemplate = new Audio(BOMB_SFX_SRC);
+    bombSoundTemplate.volume = 0.4;
+
+    shieldSoundTemplate = new Audio(SHIELD_SFX_SRC);
+    shieldSoundTemplate.volume = 0.3;
+
+    healthSoundTemplate = new Audio(HEALTH_SFX_SRC);
+    healthSoundTemplate.volume = 0.3;
+
+    explodeSoundTemplate = new Audio(EXPLODE_SFX_SRC);
+    explodeSoundTemplate.volume = 0.35;
+
+    meteorSoundTemplate = new Audio(METEOR_HIT_SFX_SRC);
+    meteorSoundTemplate.volume = 0.3;
+
+    gameoverSoundTemplate = new Audio(GAMEOVER_SFX_SRC);
+    gameoverSoundTemplate.volume = 0.4;
+
+    clickSoundTemplate = new Audio(CLICK_SFX_SRC);
+    clickSoundTemplate.volume = 0.3;
+} catch (e) {
+    console.log("Audio load error:", e);
+}
+
+function playClickSound() {
+    if (music_enabled && clickSoundTemplate) {
+        try {
+            let sfx = clickSoundTemplate.cloneNode();
+            sfx.volume = 0.3;
+            sfx.play().catch(e => {});
+        } catch(e) {}
+    }
+}
+
+// -----------------------------
+// BACKGROUND GRADIENT
+// -----------------------------
+function drawBackgroundGradient() {
+    let bgGrad = ctx.createLinearGradient(0, HEIGHT, 0, 0);
+    bgGrad.addColorStop(0, "rgb(0, 0, 0)");
+    bgGrad.addColorStop(0.5, "rgb(3, 6, 16)");
+    bgGrad.addColorStop(1, "rgb(10, 18, 40)");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+}
+
+// -----------------------------
+// HELPERS
+// -----------------------------
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function distance(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+function randint(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function uniform(min, max) { return Math.random() * (max - min) + min; }
+function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function drawCircle(x, y, r, color, width = 0) {
+    if (r < 0) return;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    if (width > 0) {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    } else {
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+}
+
+function drawPolygon(points, color, width = 0) {
+    if(points.length === 0) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0], points[i][1]);
+    }
+    ctx.closePath();
+    if (width > 0) {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    } else {
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+}
+
+function drawRect(rect, color, width = 0, borderRadius = 0) {
+    ctx.beginPath();
+    ctx.roundRect(rect[0], rect[1], rect[2], rect[3], borderRadius);
+    if (width > 0) {
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    } else {
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+}
+
+function drawLine(x1, y1, x2, y2, color, width) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+}
+
+function drawText(text, font, color, x, y, alpha = 1.0, align = "center") {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+    ctx.restore();
+}
+
+function draw_coin_graphic(x, y, radius = 12) {
+    let pulse = Math.abs(Math.sin(performance.now() * 0.005)) * 4;
+    drawCircle(x, y, radius + pulse, ORANGE, 2);
+    drawCircle(x, y, radius, YELLOW);
+    drawCircle(x, y, radius - 3, "rgb(255, 255, 150)");
+    drawCircle(x, y, Math.max(1, radius - 6), ORANGE);
+    drawCircle(x, y, radius, WHITE, 1);
+}
+
+function draw_heart(x, y, size = 1.0, color = RED) {
+    ctx.beginPath();
+    ctx.arc(x - 4 * size, y - 4 * size, 5 * size, Math.PI, 0);
+    ctx.arc(x + 4 * size, y - 4 * size, 5 * size, Math.PI, 0);
+    ctx.lineTo(x, y + 8 * size);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
+function collidePoint(rect, mx, my) {
+    return mx >= rect[0] && mx <= rect[0] + rect[2] && my >= rect[1] && my <= rect[1] + rect[3];
+}
+
+// -----------------------------
+// ROCKET VISUAL SYSTEM
+// -----------------------------
+function drawRocketVisual(ctx, cx, cy, type, scale) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    
+    let outline_color = "rgb(15, 20, 35)";
+    
+    if (type === "Classic Neon") {
+        let fin_col = RED, mid_col = "rgb(40, 100, 230)", top_col = WHITE, nose_col = RED, orange_col = ORANGE;
+        let nozzle = [[-8, 26], [8, 26], [12, 32], [-12, 32]];
+        drawPolygon(nozzle, METEOR_DARK); drawPolygon(nozzle, outline_color, 2);
+        let left_fin = [[-13, 0], [-28, 10], [-28, 28], [-10, 20]];
+        drawPolygon(left_fin, fin_col); drawPolygon(left_fin, outline_color, 2);
+        let right_fin = [[13, 0], [28, 10], [28, 28], [10, 20]];
+        drawPolygon(right_fin, fin_col); drawPolygon(right_fin, outline_color, 2);
+        let blue_body = [[-14, 14], [14, 14], [10, 26], [-10, 26]];
+        drawPolygon(blue_body, mid_col); drawPolygon(blue_body, outline_color, 2);
+        let o_body = [[-14, -2], [14, -2], [14, 14], [-14, 14]];
+        drawPolygon(o_body, orange_col); drawPolygon(o_body, outline_color, 2);
+        let w_body = [[-14, -18], [14, -18], [14, -2], [-14, -2]];
+        drawPolygon(w_body, top_col); drawPolygon(w_body, outline_color, 2);
+        let nose = [[0, -38], [-14, -18], [14, -18]];
+        drawPolygon(nose, nose_col); drawPolygon(nose, outline_color, 2);
+        drawLine(-7, -18, 0, -7, outline_color, 2); drawLine(0, -7, 7, -18, outline_color, 2);
+        let star_pts = [];
+        for (let i = 0; i < 5; i++) {
+            let angle_outer = (i * 72 - 90) * Math.PI / 180;
+            star_pts.push([Math.cos(angle_outer) * 5, 6 + Math.sin(angle_outer) * 5]);
+            let angle_inner = angle_outer + 36 * Math.PI / 180;
+            star_pts.push([Math.cos(angle_inner) * 2, 6 + Math.sin(angle_inner) * 2]);
+        }
+        drawPolygon(star_pts, WHITE);
+        let center_fin = [[0, 12], [-4, 32], [4, 32]];
+        drawPolygon(center_fin, "rgb(200, 30, 40)"); drawPolygon(center_fin, outline_color, 2);
+    }
+    else if (type === "Cyber Neon") {
+        let prim = PURPLE, sec = CYAN, dark = "rgb(20, 25, 45)";
+        let nozzle = [[-10, 20], [10, 20], [14, 30], [-14, 30]];
+        drawPolygon(nozzle, METEOR_DARK); drawPolygon(nozzle, outline_color, 2);
+        let engine = [[-16, 5], [16, 5], [16, 25], [-16, 25]];
+        drawPolygon(engine, prim); drawPolygon(engine, outline_color, 2);
+        let body = [[-12, -25], [12, -25], [12, 10], [-12, 10]];
+        drawPolygon(body, sec); drawPolygon(body, outline_color, 2);
+        let nose = [[-8, -35], [8, -35], [12, -25], [-12, -25]];
+        drawPolygon(nose, prim); drawPolygon(nose, outline_color, 2);
+        let l_pod = [[-24, -5], [-16, -5], [-16, 20], [-24, 20]];
+        drawPolygon(l_pod, dark); drawPolygon(l_pod, outline_color, 2);
+        let r_pod = [[16, -5], [24, -5], [24, 20], [16, 20]];
+        drawPolygon(r_pod, dark); drawPolygon(r_pod, outline_color, 2);
+        drawRect([-6, -15, 12, 20], dark);
+        drawLine(-16, -10, -24, -15, sec, 2); drawLine(16, -10, 24, -15, sec, 2);
+    }
+    else if (type === "Solar Flare") {
+        let prim = ORANGE, sec = YELLOW, dark = RED;
+        let engine = [[-10, 20], [10, 20], [6, 35], [-6, 35]];
+        drawPolygon(engine, METEOR_DARK); drawPolygon(engine, outline_color, 2);
+        let l_wing = [[-8, -5], [-35, 25], [-14, 25]];
+        drawPolygon(l_wing, dark); drawPolygon(l_wing, outline_color, 2);
+        let r_wing = [[8, -5], [35, 25], [14, 25]];
+        drawPolygon(r_wing, dark); drawPolygon(r_wing, outline_color, 2);
+        let body = [[-10, -10], [10, -10], [14, 25], [-14, 25]];
+        drawPolygon(body, sec); drawPolygon(body, outline_color, 2);
+        let nose = [[0, -45], [-10, -10], [10, -10]];
+        drawPolygon(nose, prim); drawPolygon(nose, outline_color, 2);
+        drawPolygon([[0, -20], [-5, 5], [5, 5]], WHITE);
+    }
+    else if (type === "Toxic Viper") {
+        let prim = GREEN, sec = "rgb(40, 45, 50)", accent = "rgb(150, 255, 50)";
+        let nozzle = [[-6, 20], [6, 20], [10, 28], [-10, 28]];
+        drawPolygon(nozzle, METEOR_DARK); drawPolygon(nozzle, outline_color, 2);
+        let body = [[-6, -25], [6, -25], [8, 22], [-8, 22]];
+        drawPolygon(body, sec); drawPolygon(body, outline_color, 2);
+        let nose = [[0, -40], [-6, -25], [6, -25]];
+        drawPolygon(nose, prim); drawPolygon(nose, outline_color, 2);
+        let l_fwd = [[-6, -10], [-25, -20], [-22, 5], [-8, 15]];
+        drawPolygon(l_fwd, prim); drawPolygon(l_fwd, outline_color, 2);
+        let r_fwd = [[6, -10], [25, -20], [22, 5], [8, 15]];
+        drawPolygon(r_fwd, prim); drawPolygon(r_fwd, outline_color, 2);
+        drawLine(0, -20, 0, 10, accent, 2);
+    }
+    else if (type === "Galaxy Phantom") {
+        let prim = "rgb(140, 50, 200)", sec = "rgb(30, 30, 40)", glow = "rgb(200, 150, 255)";
+        let outer = [[0, -35], [-40, 15], [-15, 30], [0, 20], [15, 30], [40, 15]];
+        drawPolygon(outer, sec); drawPolygon(outer, outline_color, 2);
+        let inner = [[0, -20], [-20, 10], [-5, 20], [0, 15], [5, 20], [20, 10]];
+        drawPolygon(inner, prim); drawPolygon(inner, outline_color, 2);
+        drawCircle(0, 5, 8, glow);
+        drawCircle(0, 5, 4, WHITE);
+        drawLine(-25, 10, -40, -5, prim, 2); drawLine(25, 10, 40, -5, prim, 2);
+    }
+    
+    ctx.restore();
+}
+
+// -----------------------------
+// STARFIELD
+// -----------------------------
+let stars = [];
+for (let i = 0; i < 45; i++) { 
+    stars.push({
+        x: randint(0, WIDTH),
+        y: randint(0, HEIGHT),
+        speed: uniform(0.5, 3.5),
+        size: choice([1, 1, 1, 2])
+    });
+}
+
+function update_stars(speed_mult = 1.0) {
+    for (let s of stars) {
+        s.y += s.speed * speed_mult;
+        if (s.y > HEIGHT) {
+            s.y = -3;
+            s.x = randint(0, WIDTH);
+        }
+    }
+}
+
+function draw_stars() {
+    for (let s of stars) {
+        let c = `rgb(${100 + s.size * 45}, ${110 + s.size * 35}, ${180 + s.size * 25})`;
+        drawCircle(s.x, s.y, s.size, c);
+    }
+}
+
+// -----------------------------
+// OBJECT POOLING SYSTEM
+// -----------------------------
+class ObjectPool {
+    constructor(createFn, size = 50) {
+        this.pool = [];
+        for (let i = 0; i < size; i++) {
+            let item = createFn();
+            item.active = false;
+            this.pool.push(item);
+        }
+    }
+    get() {
+        for (let item of this.pool) {
+            if (!item.active) {
+                item.active = true;
+                return item;
+            }
+        }
+        let newItem = this.pool[0].constructor ? new this.pool[0].constructor() : {};
+        newItem.active = true;
+        this.pool.push(newItem);
+        return newItem;
+    }
+    release(item) {
+        item.active = false;
+    }
+}
+
+let particlePool = new ObjectPool(() => ({
+    x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 30, color: WHITE, r: 2, active: false
+}), 100);
+
+let particles = [];
+
+function burst(x, y, color, amount = 8) { 
+    for (let i = 0; i < amount; i++) {
+        let ang = Math.random() * Math.PI * 2;
+        let speed = uniform(1.2, 5.5);
+        let p = particlePool.get();
+        p.x = x; p.y = y;
+        p.vx = Math.cos(ang) * speed;
+        p.vy = Math.sin(ang) * speed;
+        p.life = randint(18, 38);
+        p.max = p.life;
+        p.color = color;
+        p.r = randint(2, 5);
+        particles.push(p);
+    }
+}
+
+function meteor_burst(x, y) {
+    if (music_enabled && meteorSoundTemplate) {
+        try { let sfx = meteorSoundTemplate.cloneNode(); sfx.volume = 0.3; sfx.play().catch(e=>{}); } catch(e){}
+    }
+
+    for (let i = 0; i < 8; i++) { 
+        let ang = Math.random() * Math.PI * 2;
+        let speed = uniform(2.0, 7.0);
+        let p = particlePool.get();
+        p.x = x; p.y = y;
+        p.vx = Math.cos(ang) * speed;
+        p.vy = Math.sin(ang) * speed;
+        p.life = randint(25, 50);
+        p.max = p.life;
+        p.color = choice([METEOR_GRAY, METEOR_DARK, WHITE]);
+        p.r = randint(4, 9);
+        particles.push(p);
+    }
+}
+
+function update_particles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        if (!p.active) { particles.splice(i, 1); continue; }
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+        p.life -= 1;
+        if (p.life <= 0) {
+            p.active = false;
+            particles.splice(i, 1);
+        }
+    }
+}
+
+function draw_particles() {
+    for (let p of particles) {
+        if (!p.active) continue;
+        let alpha = Math.max(0, p.life / p.max);
+        let r = Math.max(1, p.r * alpha); 
+        drawCircle(p.x, p.y, r, p.color);
+    }
+}
+
+class FloatingText {
+    constructor(x, y, text, color, life = 45, font = FONT_SMALL) {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.life = life;
+        this.max_life = life;
+        this.speed = 1.8;
+        this.font = font;
+    }
+    update() {
+        this.y -= this.speed;
+        this.life -= 1;
+    }
+    draw() {
+        let alpha = Math.max(0, this.life / this.max_life);
+        drawText(this.text, this.font, this.color, this.x, this.y, alpha);
+    }
+}
+
+let floating_texts = [];
+
+class Shockwave {
+    constructor(x, y, speed = 12, max_rad_mult = 1.0) {
+        this.x = x;
+        this.y = y;
+        this.radius = 10;
+        this.speed = speed;
+        this.active = true;
+        let mult = upgrades["Bigger Blast"].level > 0 ? 1.5 : 1.0;
+        this.max_radius = (Math.max(WIDTH, HEIGHT) / 2) * max_rad_mult * mult;
+    }
+    update() {
+        this.radius += this.speed;
+        if (this.radius > this.max_radius) this.active = false;
+    }
+    draw() {
+        for (let i = 0; i < 2; i++) {
+            let r = this.radius - (i * 40);
+            if (r > 0 && r < this.max_radius) {
+                let thickness = Math.max(1, 5 - (r / this.max_radius) * 5);
+                let color = i === 0 ? CYAN : WHITE;
+                drawCircle(this.x, this.y, r, color, thickness);
+            }
+        }
+    }
+}
+
+let shockwaves = [];
+
+// -----------------------------
+// SAVE & LOAD SYSTEM
+// -----------------------------
+let upgrades = {
+    "Speed": { cost: 250, level: 0, max: 3 },
+    "Extra Life": { cost: 500, level: 0, max: 2 },
+    "Coin Magnet": { cost: 350, level: 0, max: 2 },
+    "Combo Shield": { cost: 600, level: 0, max: 2 },
+    "Bigger Blast": { cost: 1000, level: 0, max: 1 }
+};
+
+let rockets = {
+    "Classic Neon": { cost: 0, unlocked: true, desc: "Standard Space Rocket" },
+    "Cyber Neon": { cost: 1000, unlocked: false, desc: "+10% Laser Duration" },
+    "Solar Flare": { cost: 2500, unlocked: false, desc: "Start with Auto-Fire" },
+    "Toxic Viper": { cost: 4000, unlocked: false, desc: "Extra Magnet Range" },
+    "Galaxy Phantom": { cost: 6000, unlocked: false, desc: "+10% Combo Duration" }
+};
+
+let missions = [
+    { text: "Destroy 20 Meteors", target: 20, current: 0, reward: 100, done: false },
+    { text: "Perform 10 Near Misses", target: 10, current: 0, reward: 150, done: false },
+    { text: "Reach x30 Combo", target: 30, current: 0, reward: 250, done: false },
+    { text: "Survive for 120s", target: 120, current: 0, reward: 300, done: false }
+];
+
+let selected_rocket = "Classic Neon";
+let best_score = 0;
+let best_combo = 0;
+let total_coins = 0;
+
+function saveGame() {
+    localStorage.setItem("spaceEscape_bestScore", best_score);
+    localStorage.setItem("spaceEscape_bestCombo", best_combo);
+    localStorage.setItem("spaceEscape_totalCoins", total_coins);
+    localStorage.setItem("spaceEscape_selectedRocket", selected_rocket);
+    localStorage.setItem("spaceEscape_upgrades", JSON.stringify(upgrades));
+    localStorage.setItem("spaceEscape_rockets", JSON.stringify(rockets));
+    localStorage.setItem("spaceEscape_missions", JSON.stringify(missions));
+}
+
+function loadGame() {
+    let sScore = localStorage.getItem("spaceEscape_bestScore");
+    if (sScore !== null) best_score = parseInt(sScore);
+
+    let sCombo = localStorage.getItem("spaceEscape_bestCombo");
+    if (sCombo !== null) best_combo = parseInt(sCombo);
+
+    let sCoins = localStorage.getItem("spaceEscape_totalCoins");
+    if (sCoins !== null) total_coins = parseInt(sCoins);
+
+    let sRocket = localStorage.getItem("spaceEscape_selectedRocket");
+    if (sRocket !== null) selected_rocket = sRocket;
+
+    let sUpgrades = localStorage.getItem("spaceEscape_upgrades");
+    if (sUpgrades !== null) {
+        let parsed = JSON.parse(sUpgrades);
+        for (let k in parsed) {
+            if (upgrades[k]) {
+                upgrades[k].level = parsed[k].level;
+                for(let i = 0; i < upgrades[k].level; i++) {
+                    upgrades[k].cost = Math.floor(upgrades[k].cost * 1.5);
+                }
+            }
+        }
+    }
+
+    let sRockets = localStorage.getItem("spaceEscape_rockets");
+    if (sRockets !== null) {
+        let parsed = JSON.parse(sRockets);
+        for(let k in parsed) if(rockets[k]) rockets[k].unlocked = parsed[k].unlocked;
+    }
+
+    let sMissions = localStorage.getItem("spaceEscape_missions");
+    if (sMissions !== null) missions = JSON.parse(sMissions);
+}
+
+loadGame();
+
+let shop_tab = "upgrades"; 
+
+// -----------------------------
+// PLAYER
+// -----------------------------
+class Player {
+    constructor() {
+        this.reset();
+    }
+    
+    reset() {
+        this.x = WIDTH / 2;
+        this.y = HEIGHT * 0.76;
+        this.radius = 20;
+        this.speed = 9 + (upgrades["Speed"].level * 1.5);
+        this.vx = 0;
+        this.direction = 1; 
+        this.max_hp = 3 + upgrades["Extra Life"].level;
+        this.hp = this.max_hp;
+        
+        this.score = 0;
+        this.level = 1;
+        this.combo = 0;
+        this.max_combo = 0;
+        this.combo_timer = 0;
+        
+        let base_combo_time = 300;
+        if (upgrades["Combo Shield"].level === 1) base_combo_time = 390;
+        else if (upgrades["Combo Shield"].level >= 2) base_combo_time = 480;
+        
+        if (selected_rocket === "Galaxy Phantom") base_combo_time = Math.floor(base_combo_time * 1.1);
+
+        this.max_combo_timer = base_combo_time;
+        
+        this.invuln = 0;
+        this.fire_cd = 0;
+        this.shoot_timer = 0;
+        this.laser_timer = 0;
+        this.shield_timer = 0;
+        this.trail = [];
+    }
+
+    get_multiplier() {
+        if (this.combo >= 30) return 5.0;
+        else if (this.combo >= 20) return 4.0;
+        else if (this.combo >= 10) return 3.0;
+        else if (this.combo >= 5) return 2.0;
+        else if (this.combo >= 3) return 1.5;
+        return 1.0;
+    }
+
+    add_combo(amount) {
+        let old_combo = this.combo;
+        this.combo += amount;
+        this.max_combo = Math.max(this.max_combo, this.combo);
+        
+        missions[2].current = Math.max(missions[2].current, this.combo); 
+        check_missions();
+        
+        let base_combo_time = this.level >= 5 ? 420 : 300;
+        if (upgrades["Combo Shield"].level === 1) base_combo_time += 90;
+        else if (upgrades["Combo Shield"].level >= 2) base_combo_time += 180;
+
+        if (selected_rocket === "Galaxy Phantom") base_combo_time = Math.floor(base_combo_time * 1.1);
+        
+        this.max_combo_timer = base_combo_time;
+        this.combo_timer = this.max_combo_timer;
+
+        if (old_combo < 50 && this.combo >= 50) {
+            screen_shake = 30;
+            bg_flash = 25;
+            floating_texts.push(new FloatingText(WIDTH / 2, HEIGHT / 2, "ULTRA COMBO!", YELLOW, 90, FONT_BIG));
+        }
+    }
+
+    add_score(base_amount, action_text = null, x = null, y = null, color = WHITE) {
+        let mult = this.get_multiplier();
+        let final_amount = Math.floor(base_amount * mult);
+        this.score += final_amount;
+        
+        if (action_text && x !== null && y !== null) {
+            let mult_str = mult > 1.0 ? ` (x${mult})` : "";
+            let full_text = `${action_text} +${final_amount}${mult_str}`;
+            floating_texts.push(new FloatingText(x, y, full_text, color, 45, FONT_SMALL));
+        }
+        return final_amount;
+    }
+
+    update() {
+        let target_vx = this.speed * this.direction;
+        this.vx += (target_vx - this.vx) * 0.12;
+        this.x += this.vx;
+
+        if (this.x <= 35) {
+            this.x = 35;
+            this.direction = 1;
+            this.vx *= -0.5;
+        } else if (this.x >= WIDTH - 35) {
+            this.x = WIDTH - 35;
+            this.direction = -1;
+            this.vx *= -0.5;
+        }
+
+        for (let i = 0; i < 4; i++) {
+            this.trail.push({
+                x: this.x + uniform(-3, 3),
+                y: this.y + 30,
+                vx: 0.0,
+                scatter_vx: uniform(-3.5, 3.5),
+                target_vx: -(this.vx * 0.35),
+                vy: uniform(5.0, 9.0),
+                life: randint(18, 28),
+                max_life: 28,
+                r: uniform(4, 9),
+                color: choice([WHITE, YELLOW, ORANGE, RED])
+            });
+        }
+        
+        for (let i = this.trail.length - 1; i >= 0; i--) {
+            let p = this.trail[i];
+            let age = p.max_life - p.life;
+            if (age > 5) p.vx += (p.scatter_vx - p.vx) * 0.15;
+            if (age > 2) p.vx += (p.target_vx - p.vx) * 0.08;
+            
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 1;
+            if (p.life <= 0) this.trail.splice(i, 1);
+        }
+
+        this.fire_cd = Math.max(0, this.fire_cd - 1);
+        this.invuln = Math.max(0, this.invuln - 1);
+        this.laser_timer = Math.max(0, this.laser_timer - 1);
+        this.shoot_timer = Math.max(0, this.shoot_timer - 1);
+        this.shield_timer = Math.max(0, this.shield_timer - 1);
+
+        if (laserMusic && this.laser_timer === 0 && !laserMusic.paused) {
+            laserMusic.pause();
+            laserMusic.currentTime = 0;
+        }
+        
+        if (this.combo_timer > 0) {
+            this.combo_timer -= 1;
+            if (this.combo_timer <= 0) {
+                if (this.combo >= 10) screen_shake = 15;
+                if (this.combo > 0) floating_texts.push(new FloatingText(this.x, this.y - 40, "COMBO LOST!", RED, 60, FONT));
+                this.combo = 0;
+            }
+        }
+        
+        if ((this.shoot_timer > 0 || game_state === "boss_fight") && this.laser_timer <= 0) {
+            this.shoot();
+        }
+    }
+
+    change_direction() {
+        this.direction *= -1; 
+    }
+
+    shoot() {
+        if (this.fire_cd <= 0) {
+            bullets.push(new Bullet(this.x, this.y - 25));
+            this.fire_cd = 8;
+
+            if (music_enabled && bulletSoundTemplate) {
+                try {
+                    let sfx = bulletSoundTemplate.cloneNode();
+                    sfx.volume = 0.25;
+                    sfx.play().catch(err => {});
+                } catch(e) {}
+            }
+        }
+    }
+
+    damage() {
+        if (this.invuln > 0) return;
+        
+        this.hp -= 1;
+        this.invuln = 80;
+        
+        if (music_enabled && explodeSoundTemplate) {
+            try {
+                let sfx = explodeSoundTemplate.cloneNode();
+                sfx.volume = 0.35;
+                sfx.play().catch(e => {});
+            } catch(e) {}
+        }
+        
+        if (this.combo > 0) floating_texts.push(new FloatingText(this.x, this.y - 40, "COMBO LOST!", RED, 60, FONT));
+        this.combo = 0;
+        this.combo_timer = 0;
+        screen_shake = 20;
+        
+        burst(this.x, this.y, RED, 25);
+        shockwaves.push(new Shockwave(this.x, this.y, 12, 1.0));
+        
+        if (this.hp <= 0) end_game();
+    }
+
+    draw() {
+        for (let p of this.trail) {
+            let alpha = p.life / p.max_life;
+            let r = Math.max(1, p.r * alpha);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            drawCircle(p.x, p.y, r, p.color);
+            ctx.restore();
+        }
+
+        if (this.invuln && Math.floor(this.invuln / 5) % 2 === 0) {
+            // Flash effect
+        } else {
+            drawRocketVisual(ctx, this.x, this.y, selected_rocket, 1.0);
+        }
+            
+        if (this.shield_timer > 0) {
+            let pulse = Math.sin(performance.now() * 0.01) * 3;
+            drawCircle(this.x, this.y - 4, this.radius + 16 + pulse, CYAN, 3);
+            drawCircle(this.x, this.y - 4, this.radius + 12 + pulse, WHITE, 1);
+        }
+    }
+}
+
+// -----------------------------
+// BULLETS
+// -----------------------------
+class Bullet {
+    constructor(x, y) { this.x = x; this.y = y; this.speed = 22; this.r = 4; }
+    update() { this.y -= this.speed; }
+    draw() {
+        drawCircle(this.x, this.y, this.r, YELLOW);
+        drawCircle(this.x, this.y, 2, WHITE);
+    }
+}
+
+class BossBullet {
+    constructor(x, y, vx = 0, vy = 6, color = RED) {
+        this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.r = 6; this.color = color;
+    }
+    update() { this.x += this.vx; this.y += this.vy; }
+    draw() {
+        drawCircle(this.x, this.y, this.r, this.color);
+        drawCircle(this.x, this.y, 3, ORANGE);
+    }
+}
+
+// -----------------------------
+// ITEMS
+// -----------------------------
+class CoinItem {
+    constructor() {
+        this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40);
+        this.speed = 3.5; this.radius = 12; this.value = choice([10, 25, 50]);
+    }
+    update() {
+        let magnet_lvl = upgrades["Coin Magnet"].level;
+        if (magnet_lvl > 0 || selected_rocket === "Toxic Viper") {
+            let range_dist = magnet_lvl === 1 ? 170 : (magnet_lvl === 2 ? 220 : 0);
+            
+            if (selected_rocket === "Toxic Viper") range_dist += 60;
+            
+            if (range_dist > 0) {
+                let dist = distance(this.x, this.y, player.x, player.y);
+                if (dist < range_dist) {
+                    let ang = Math.atan2(player.y - this.y, player.x - this.x);
+                    this.x += Math.cos(ang) * 6;
+                    this.y += Math.sin(ang) * 6;
+                }
+            }
+        }
+        this.y += this.speed;
+    }
+    draw() { draw_coin_graphic(this.x, this.y, this.radius); }
+}
+
+class PowerUp {
+    constructor() { this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40); this.speed = 3.5; this.radius = 12; }
+    update() { this.y += this.speed; }
+    draw() {
+        let x = this.x, y = this.y;
+        let pulse = Math.abs(Math.sin(performance.now() * 0.004)) * 4;
+        drawCircle(x, y, this.radius + pulse, "rgb(0, 180, 50)", 2);
+        let pts = [[x, y-10], [x-5, y-2], [x-5, y+7], [x+5, y+7], [x+5, y-2]];
+        drawPolygon(pts, GREEN); drawPolygon(pts, WHITE, 2);
+        drawPolygon([[x-3, y+7], [x+3, y+7], [x, y+13]], YELLOW);
+        drawLine(x, y-5, x, y+4, "rgb(200, 255, 200)", 2);
+    }
+}
+
+class LaserItem {
+    constructor() { this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40); this.speed = 4.0; this.radius = 12; }
+    update() { this.y += this.speed; }
+    draw() {
+        let x = this.x, y = this.y;
+        let pulse = Math.abs(Math.sin(performance.now() * 0.006)) * 4;
+        drawRect([x - 10 - pulse, y - 10 - pulse, 20 + pulse*2, 20 + pulse*2], BLUE, 2);
+        drawRect([x - 10, y - 10, 20, 20], CYAN);
+        drawRect([x - 10, y - 10, 20, 20], WHITE, 2);
+        drawLine(x, y - 6, x, y + 6, WHITE, 4);
+    }
+}
+
+class HealthItem {
+    constructor() { this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40); this.speed = 3.0; this.radius = 12; }
+    update() { this.y += this.speed; }
+    draw() {
+        let x = this.x, y = this.y;
+        let pulse = Math.abs(Math.sin(performance.now() * 0.003)) * 3;
+        drawCircle(x, y, this.radius + pulse, "rgb(150, 0, 0)", 2);
+        drawCircle(x, y, this.radius, RED);
+        drawCircle(x, y, this.radius, WHITE, 2);
+        drawRect([x - 2, y - 7, 4, 14], WHITE);
+        drawRect([x - 7, y - 2, 14, 4], WHITE);
+    }
+}
+
+class ShieldItem {
+    constructor() { this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40); this.speed = 4.0; this.radius = 12; }
+    update() { this.y += this.speed; }
+    draw() {
+        let x = this.x, y = this.y;
+        let time_val = performance.now() * 0.005;
+        let pulse = Math.abs(Math.sin(time_val)) * 4;
+        drawCircle(x, y, this.radius + pulse, CYAN, 2);
+        drawCircle(x, y, this.radius, BLUE);
+        drawCircle(x, y, this.radius, CYAN, 2);
+        let px1 = x + Math.cos(time_val) * 6, py1 = y + Math.sin(time_val) * 6;
+        let px2 = x + Math.cos(time_val + Math.PI) * 6, py2 = y + Math.sin(time_val + Math.PI) * 6;
+        drawCircle(px1, py1, 3, WHITE); drawCircle(px2, py2, 3, WHITE);
+    }
+}
+
+class BombItem {
+    constructor() { this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40); this.speed = 4.5; this.radius = 12; }
+    update() { this.y += this.speed; }
+    draw() {
+        let x = this.x, y = this.y;
+        let pulse = Math.abs(Math.sin(performance.now() * 0.008)) * 3;
+        drawCircle(x, y, this.radius + pulse, RED, 2);
+        drawCircle(x, y, this.radius, "rgb(40, 40, 40)");
+        drawCircle(x, y, this.radius, WHITE, 2);
+        drawCircle(x, y, 6, ORANGE); drawCircle(x, y, 3, YELLOW);
+        drawLine(x, y - this.radius + 2, x + 4, y - this.radius - 4, ORANGE, 2);
+    }
+}
+
+// -----------------------------
+// ENEMIES & BOSS
+// -----------------------------
+class Enemy {
+    constructor(level) {
+        this.x = randint(30, WIDTH - 30); this.y = randint(-180, -40);
+        this.radius = choice([17, 20, 24]);
+        let base_speed = uniform(4.0, 6.0);
+        if (level >= 3) base_speed += (level * 0.35);
+        this.speed = Math.min(base_speed, 9.5);
+        this.hp = level < 3 ? 1 : choice([1, 1, 2]);
+        this.phase = Math.random() * Math.PI * 2;
+        this.dodged_near = false; this.dodged_perfect = false;
+    }
+    update() {
+        this.y += this.speed;
+        this.x += Math.sin(this.y * 0.025 + this.phase) * 1.2;
+    }
+    hit() {
+        this.hp -= 1;
+        burst(this.x, this.y, ORANGE, 6);
+        return this.hp <= 0;
+    }
+    draw() {
+        let x = this.x, y = this.y;
+        drawCircle(x, y, this.radius, "rgb(100, 55, 160)");
+        drawCircle(x, y, this.radius - 4, PURPLE);
+        drawCircle(x - 7, y - 2, 3, RED);
+        drawCircle(x + 7, y - 2, 3, RED);
+        drawLine(x - this.radius, y, x - this.radius - 7, y + 5, PURPLE, 3);
+        drawLine(x + this.radius, y, x + this.radius + 7, y + 5, PURPLE, 3);
+    }
+}
+
+class Meteor {
+    constructor(level) {
+        this.x = randint(35, WIDTH - 35); this.y = randint(-180, -40);
+        this.radius = choice([25, 32, 40]);
+        this.hp = this.radius === 25 ? 1 : (this.radius === 32 ? 2 : 3);
+        let base_speed = uniform(3.0, 5.0) + level * 0.25;
+        this.speed = Math.min(base_speed, 8.5);
+        this.offsets = [];
+        for (let i = 0; i < 8; i++) this.offsets.push(uniform(0.7, 1.1));
+        this.dodged_near = false; this.dodged_perfect = false;
+    }
+    update() { this.y += this.speed; }
+    hit() { this.hp -= 1; return this.hp <= 0; }
+    draw() {
+        let x = this.x, y = this.y;
+        let points = [];
+        for (let i = 0; i < 8; i++) {
+            let angle = i * (Math.PI / 4);
+            let r = this.radius * this.offsets[i];
+            points.push([x + Math.cos(angle) * r, y + Math.sin(angle) * r]);
+        }
+        drawPolygon(points, METEOR_GRAY); drawPolygon(points, METEOR_DARK, 3);
+        drawCircle(x - this.radius/3, y - this.radius/4, this.radius/4, METEOR_DARK);
+        drawCircle(x - this.radius/3, y - this.radius/4, this.radius/4, "rgb(90, 90, 100)", 1);
+        drawCircle(x + this.radius/4, y + this.radius/3, this.radius/5, METEOR_DARK);
+        drawCircle(x + this.radius/4, y + this.radius/3, this.radius/5, "rgb(90, 90, 100)", 1);
+    }
+}
+
+class Boss {
+    constructor(level) {
+        this.x = WIDTH / 2; this.y = -100; this.radius = 45;
+        this.hp = 100 + (level * 60); this.max_hp = this.hp;
+        this.base_speed = 3 + (level * 0.25);
+        this.direction = 1; this.fire_timer = 0; this.active = false;
+    }
+    get_phase() {
+        let ratio = this.hp / this.max_hp;
+        if (ratio > 0.7) return 1;
+        else if (ratio > 0.3) return 2;
+        else return 3;
+    }
+    update() {
+        if (this.y < 120) this.y += 2;
+        else {
+            this.active = true;
+            let phase = this.get_phase();
+            let current_speed = this.base_speed;
+            if (phase === 2) current_speed *= 1.3;
+            else if (phase === 3) current_speed *= 1.8;
+            
+            this.x += current_speed * this.direction;
+            if (this.x < 50 || this.x > WIDTH - 50) this.direction *= -1;
+            
+            this.fire_timer += 1;
+            if (phase === 1 && this.fire_timer >= 45) {
+                boss_bullets.push(new BossBullet(this.x, this.y + 40, 0, 6, RED));
+                this.fire_timer = 0;
+            } else if (phase === 2 && this.fire_timer >= 45) {
+                boss_bullets.push(new BossBullet(this.x, this.y + 40, 0, 7, ORANGE));
+                boss_bullets.push(new BossBullet(this.x, this.y + 40, -0, 6, ORANGE));
+                this.fire_timer = 0;
+            } else if (phase === 3 && this.fire_timer >= 40) {
+                boss_bullets.push(new BossBullet(this.x, this.y + 40, uniform(-3, 3), 8, PURPLE));
+                if (Math.random() < 0.4) meteors.push(new Meteor(player.level));
+                this.fire_timer = 0;
+            }
+        }
+    }
+    draw() {
+        let phase = this.get_phase();
+        let core_col = phase === 1 ? RED : (phase === 2 ? ORANGE : (Math.floor(performance.now() / 150) % 2 === 0 ? PURPLE : WHITE));
+        let cx = this.x, cy = this.y;
+        let time_val = performance.now() * 0.05;
+        
+        for (let i = 0; i < 6; i++) {
+            let angle = (i * 60 + time_val) * Math.PI / 180;
+            let px = cx + Math.cos(angle) * (this.radius + 12);
+            let py = cy + Math.sin(angle) * (this.radius + 12);
+            drawLine(cx, cy, px, py, METEOR_DARK, 8);
+            drawCircle(px, py, 6, phase < 3 ? CYAN : RED);
+        }
+        
+        drawCircle(cx, cy, this.radius, "rgb(40, 40, 45)");
+        drawCircle(cx, cy, this.radius, "rgb(80, 80, 90)", 4);
+        drawCircle(cx, cy, this.radius - 15, core_col);
+        drawCircle(cx, cy, this.radius - 22, WHITE, 2);
+        drawCircle(cx, cy, 10, "rgb(0,0,0)");
+        if (phase === 3) drawCircle(cx, cy, 6, RED);
+        
+        let bar_width = 140, bar_x = WIDTH / 2 - bar_width / 2;
+        drawRect([bar_x, 20, bar_width, 12], "rgb(50, 50, 50)");
+        drawRect([bar_x, 20, bar_width * Math.max(0, this.hp / this.max_hp), 12], phase < 3 ? GREEN : PURPLE);
+        drawRect([bar_x, 20, bar_width, 12], WHITE, 2);
+    }
+}
+
+// -----------------------------
+// GAME STATE & COLLECTIONS
+// -----------------------------
+let enemies = [];
+let meteors = [];
+let bullets = [];
+let boss_bullets = [];
+let powerups = [];
+let laser_items = [];
+let health_items = [];
+let shield_items = [];
+let bomb_items = [];
+let coin_items = [];
+let boss = null;
+
+let run_time_seconds = 0;
+let game_state = "menu";
+let shop_return_state = "menu";
+
+let music_enabled = true;
+let vibration_enabled = true;
+
+// --- COUNTDOWN VARIABLES ---
+let countdown_timer = 0; 
+
+let spawn_timer = 0, meteor_timer = 0, powerup_timer = 0, laser_timer_spawn = 0;
+let health_timer_spawn = 0, shield_timer_spawn = 0, bomb_timer_spawn = 0, coin_timer_spawn = 0;
+
+let run_coins = 0;
+let revive_count = 0, survival_timer = 0, level_timer = 0, screen_shake = 0, bg_flash = 0;
+
+let powerup_delay = 0, laser_delay = 0, health_delay = 0, shield_delay = 0, bomb_delay = 0, coin_delay = 0;
+let next_boss_time = FIRST_BOSS_SECONDS;
+
+let death_clock = 0;
+let pausedScreenData = null; 
+let gameoverScreenData = null;
+
+let player = new Player();
+
+// UI Rects
+let start_btn_rect = [0,0,0,0], shop_btn_rect = [0,0,0,0], mission_btn_rect = [0,0,0,0], revive_btn_rect = [0,0,0,0], quit_btn_rect = [0,0,0,0];
+let restart_btn_rect = [0,0,0,0], shop_over_btn_rect = [0,0,0,0], menu_btn_rect = [0,0,0,0];
+let tab_upgrades_rect = [0,0,0,0], tab_rockets_rect = [0,0,0,0];
+let pause_resume_rect = [0,0,0,0], pause_restart_rect = [0,0,0,0], pause_menu_rect = [0,0,0,0], music_icon_rect = [0,0,0,0], vibe_icon_rect = [0,0,0,0], pause_btn_rect = [0,0,0,0];
+let menu_music_btn_rect = [0,0,0,0];
+let back_btn_rect = [0,0,0,0];
+let rocket_btn_rects = {};
+
+function check_missions() {
+    for (let i = 0; i < missions.length; i++) {
+        let m = missions[i];
+        if (!m.done && m.current >= m.target) {
+            m.current = m.target;
+            m.done = true;
+            total_coins += m.reward;
+            
+            saveGame(); 
+            
+            if (game_state === "playing" || game_state === "boss_fight") {
+                floating_texts.push(new FloatingText(WIDTH / 2, HEIGHT / 4, `MISSION COMPLETED! +${m.reward} 🪙`, GREEN, 100, FONT_BIG));
+            }
+        }
+    }
+}
+
+function start_game() {
+    playClickSound();
+    player.reset();
+    enemies = []; meteors = []; bullets = []; boss_bullets = []; particles = [];
+    powerups = []; laser_items = []; health_items = []; shield_items = []; bomb_items = []; coin_items = [];
+    floating_texts = []; shockwaves = []; boss = null;
+    
+    spawn_timer = meteor_timer = powerup_timer = laser_timer_spawn = health_timer_spawn = shield_timer_spawn = bomb_timer_spawn = coin_timer_spawn = 0;
+    survival_timer = level_timer = screen_shake = bg_flash = 0;
+    run_time_seconds = run_coins = revive_count = 0;
+    
+    powerup_delay = randint(200, 380); laser_delay = randint(600, 950); health_delay = randint(500, 900);
+    shield_delay = randint(700, 1100); bomb_delay = randint(900, 1500); coin_delay = randint(150, 300);
+    
+    next_boss_time = FIRST_BOSS_SECONDS; 
+    
+    if (selected_rocket === "Solar Flare") player.shoot_timer = 180; 
+
+    game_state = "playing";
+}
+
+function end_game() {
+    best_score = Math.max(best_score, player.score);
+    best_combo = Math.max(best_combo, player.max_combo);
+    total_coins += run_coins;
+    boss = null; boss_bullets = [];
+    
+    saveGame(); 
+    
+    if (laserMusic && !laserMusic.paused) {
+        laserMusic.pause();
+        laserMusic.currentTime = 0;
+    }
+
+    if (music_enabled && gameoverSoundTemplate) {
+        try {
+            let sfx = gameoverSoundTemplate.cloneNode();
+            sfx.volume = 0.4;
+            sfx.play().catch(e => {});
+        } catch(e) {}
+    }
+    
+    gameoverScreenData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    death_clock = performance.now();
+    game_state = "revive_screen";
+}
+
+function handle_collisions() {
+    let all_objs = enemies.concat(meteors);
+    for (let obj of all_objs) {
+        if (obj.y > player.y - 60 && obj.y < player.y + 60) {
+            let dist = distance(player.x, player.y, obj.x, obj.y);
+            let col_dist = player.radius + obj.radius - 5;
+            let perfect_dist = col_dist + 10;
+            let near_dist = col_dist + 25;
+            
+            if (dist > col_dist && dist <= perfect_dist) {
+                if (!obj.dodged_perfect) {
+                    obj.dodged_perfect = true; obj.dodged_near = true;
+                    missions[1].current++; check_missions(); 
+                    player.add_combo(2);
+                    player.add_score(30, "PERFECT!", obj.x, obj.y - 20, PURPLE);
+                }
+            } else if (dist > perfect_dist && dist <= near_dist) {
+                if (!obj.dodged_near) {
+                    obj.dodged_near = true;
+                    missions[1].current++; check_missions(); 
+                    player.add_combo(1);
+                    player.add_score(15, "NEAR MISS!", obj.x, obj.y - 20, CYAN);
+                }
+            }
+        }
+    }
+
+    for (let sw of shockwaves) {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            if (distance(sw.x, sw.y, e.x, e.y) < sw.radius + e.radius) {
+                enemies.splice(i, 1);
+                player.add_score(10, "KILLED", e.x, e.y, ORANGE);
+                burst(e.x, e.y, CYAN, 15);
+            }
+        }
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            let m = meteors[i];
+            if (distance(sw.x, sw.y, m.x, m.y) < sw.radius + m.radius) {
+                meteors.splice(i, 1);
+                missions[0].current++; check_missions(); 
+                player.add_score(20, "DESTROYED", m.x, m.y, METEOR_GRAY);
+                meteor_burst(m.x, m.y);
+            }
+        }
+    }
+
+    if (player.laser_timer > 0) {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            if (Math.abs(e.x - player.x) < 30 + e.radius) {
+                enemies.splice(i, 1); player.add_combo(1); player.add_score(10); burst(e.x, e.y, CYAN, 20);
+            }
+        }
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            let m = meteors[i];
+            if (Math.abs(m.x - player.x) < 30 + m.radius) {
+                meteors.splice(i, 1); 
+                missions[0].current++; check_missions(); 
+                player.add_combo(1); player.add_score(20); meteor_burst(m.x, m.y);
+            }
+        }
+    }
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        let b = bullets[i];
+        let hit_something = false;
+        if (b.y < -20 || b.y > HEIGHT + 20) { bullets.splice(i, 1); continue; }
+
+        if (boss && distance(b.x, b.y, boss.x, boss.y) < boss.radius + b.r) {
+            boss.hp -= 10; burst(b.x, b.y, YELLOW, 5); hit_something = true;
+            if (boss.hp <= 0) {
+                burst(boss.x, boss.y, RED, 50); boss = null; boss_bullets = []; game_state = "playing";
+                player.score += 750; run_coins += 100;
+                floating_texts.push(new FloatingText(WIDTH/2, HEIGHT/2, "BOSS DEFEATED! +750 | +100🪙", YELLOW, 75, FONT_SMALL));
+            }
+        }
+
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            let e = enemies[j];
+            if (distance(b.x, b.y, e.x, e.y) < e.radius + 7) {
+                hit_something = true;
+                if (e.hit()) { enemies.splice(j, 1); player.add_combo(1); player.add_score(10, "KILLED", e.x, e.y, ORANGE); }
+                break;
+            }
+        }
+        
+        if (!hit_something) {
+            for (let j = meteors.length - 1; j >= 0; j--) {
+                let m = meteors[j];
+                if (distance(b.x, b.y, m.x, m.y) < m.radius) {
+                    hit_something = true; burst(b.x, b.y, METEOR_GRAY, 5);
+                    if (m.hit()) {
+                        meteors.splice(j, 1); 
+                        missions[0].current++; check_missions(); 
+                        player.add_combo(1); player.add_score(20, "DESTROYED", m.x, m.y, METEOR_GRAY); meteor_burst(m.x, m.y);
+                    }
+                    break;
+                }
+            }
+        }
+        if (hit_something) bullets.splice(i, 1);
+    }
+
+    for (let i = boss_bullets.length - 1; i >= 0; i--) {
+        let bb = boss_bullets[i];
+        if (distance(player.x, player.y, bb.x, bb.y) < player.radius + bb.r) {
+            boss_bullets.splice(i, 1); player.damage();
+        }
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        let e = enemies[i];
+        if (distance(player.x, player.y, e.x, e.y) < player.radius + e.radius - 5) {
+            if (player.shield_timer > 0) {
+                enemies.splice(i, 1); player.add_combo(1); player.add_score(15, "BASH!", e.x, e.y, BLUE);
+                burst(e.x, e.y, BLUE, 20); screen_shake = 5;
+            } else player.damage();
+        }
+    }
+
+    for (let i = meteors.length - 1; i >= 0; i--) {
+        let m = meteors[i];
+        if (distance(player.x, player.y, m.x, m.y) < player.radius + m.radius - 5) {
+            if (player.shield_timer > 0) {
+                meteors.splice(i, 1); player.add_combo(1); player.add_score(25, "CRUSH!", m.x, m.y, BLUE);
+                meteor_burst(m.x, m.y); screen_shake = 5;
+            } else player.damage();
+        }
+    }
+
+    let arrs = [
+        [coin_items, c => {
+            run_coins += c.value; 
+            floating_texts.push(new FloatingText(player.x, player.y - 40, `+${c.value} COIN`, YELLOW, 45, FONT_SMALL)); 
+            burst(player.x, player.y, YELLOW, 12);
+            if (music_enabled && coinSoundTemplate) {
+                try { let sfx = coinSoundTemplate.cloneNode(); sfx.volume = 0.3; sfx.play().catch(e=>{}); } catch(e){}
+            }
+        }], 
+        [powerups, p => {
+            player.shoot_timer = 300; player.add_combo(2); player.add_score(10, "AUTO-FIRE!", player.x, player.y - 40, GREEN); burst(player.x, player.y, GREEN, 20);
+        }], 
+        [laser_items, l => {
+            player.laser_timer = (selected_rocket === "Cyber Neon") ? Math.floor(180 * 1.1) : 180; 
+            player.add_combo(2); player.add_score(10, "LASER!", player.x, player.y - 40, CYAN); burst(player.x, player.y, CYAN, 25);
+            if (music_enabled && laserMusic) {
+                try { laserMusic.currentTime = 0; laserMusic.play().catch(err => {}); } catch(e) {}
+            }
+        }], 
+        [health_items, h => {
+            if (player.hp < player.max_hp) { 
+                player.hp++; player.add_combo(2); player.add_score(20, "HEALTH!", player.x, player.y - 40, RED); burst(player.x, player.y, RED, 20); 
+            } else { 
+                player.add_combo(2); player.add_score(50, "BONUS!", player.x, player.y - 40, YELLOW); burst(player.x, player.y, WHITE, 15); 
+            }
+            if (music_enabled && healthSoundTemplate) {
+                try { let sfx = healthSoundTemplate.cloneNode(); sfx.volume = 0.3; sfx.play().catch(e=>{}); } catch(e){}
+            }
+        }], 
+        [shield_items, s => {
+            player.shield_timer = 300; player.add_combo(2); player.add_score(10, "SHIELD!", player.x, player.y - 40, BLUE); burst(player.x, player.y, BLUE, 25);
+            if (music_enabled && shieldSoundTemplate) {
+                try { let sfx = shieldSoundTemplate.cloneNode(); sfx.volume = 0.3; sfx.play().catch(e=>{}); } catch(e){}
+            }
+        }], 
+        [bomb_items, b => {
+            screen_shake = 40; bg_flash = 30; player.add_combo(5); floating_texts.push(new FloatingText(WIDTH/2, HEIGHT/2, "NUKE!", ORANGE, 70, FONT_BIG));
+            for (let e of enemies) { player.add_score(10); burst(e.x, e.y, ORANGE, 15); }
+            for (let m of meteors) { player.add_score(20); meteor_burst(m.x, m.y); }
+            enemies = []; meteors = []; bullets = [];
+            if (music_enabled && explodeSoundTemplate) {
+                try { let sfx = explodeSoundTemplate.cloneNode(); sfx.volume = 0.4; sfx.play().catch(e=>{}); } catch(e){}
+            }
+        }]
+    ];
+
+    for (let [arr, action] of arrs) {
+        for (let i = arr.length - 1; i >= 0; i--) {
+            let item = arr[i];
+            if (distance(player.x, player.y, item.x, item.y) < player.radius + item.radius) {
+                action(item); arr.splice(i, 1);
+            }
+        }
+    }
+}
+
+// -----------------------------
+// DRAW FUNCTIONS
+// -----------------------------
+function draw_hud() {
+    drawText(`SCORE ${player.score}`, FONT, WHITE, 80, 25);
+    if (!boss) drawText(`LEVEL ${player.level}`, FONT, CYAN, WIDTH / 2, 25);
+    
+    let heart_start_x = 35, heart_y = 55;
+    for (let i = 0; i < player.max_hp; i++) {
+        let color = i < player.hp ? RED : "rgb(70, 40, 55)";
+        draw_heart(heart_start_x + i * 30, heart_y, 1.2, color);
+    }
+    
+    drawText(`${total_coins + run_coins}`, FONT, YELLOW, WIDTH - 65, 25);
+    draw_coin_graphic(WIDTH - 20, 25, 10);
+    
+    pause_btn_rect = [WIDTH - 55, 50, 40, 28];
+    drawRect(pause_btn_rect, "rgb(20, 30, 50)", 0, 8);
+    drawRect(pause_btn_rect, CYAN, 2, 8);
+    drawRect([pause_btn_rect[0] + 12, pause_btn_rect[1] + 7, 4, 14], CYAN, 0, 2);
+    drawRect([pause_btn_rect[0] + 24, pause_btn_rect[1] + 7, 4, 14], CYAN, 0, 2);
+
+    if (player.combo > 0) {
+        let bar_max_w = WIDTH / 2;
+        let bar_w = (player.combo_timer / player.max_combo_timer) * bar_max_w;
+        let bar_x = WIDTH / 4;
+        let bar_y = 80;
+        
+        drawRect([bar_x, bar_y, bar_max_w, 6], "rgb(50, 50, 50)", 0, 3);
+        drawRect([bar_x, bar_y, bar_w, 6], ORANGE, 0, 3);
+        
+        let mult = player.get_multiplier();
+        let mult_str = mult > 1.0 ? `x${mult}` : "";
+        drawText(`COMBO ${player.combo} ${mult_str}`, FONT_SMALL, ORANGE, WIDTH / 2, 100);
+    }
+    
+    let y_offset = 120;
+    if (player.laser_timer > 0) { drawText(`LASER: ${Math.ceil(player.laser_timer / 60.0)}s`, FONT_SMALL, CYAN, WIDTH / 2, y_offset); y_offset += 20; }
+    if (player.shoot_timer > 0) { drawText(`AUTO: ${Math.ceil(player.shoot_timer / 60.0)}s`, FONT_SMALL, GREEN, WIDTH / 2, y_offset); y_offset += 20; }
+    if (player.shield_timer > 0) { drawText(`SHIELD: ${Math.ceil(player.shield_timer / 60.0)}s`, FONT_SMALL, BLUE, WIDTH / 2, y_offset); }
+}
+
+
+// -----------------------------
+// MAIN MENU - ROCKET / PIPE ANIMATIONS
+// -----------------------------
+function menuLift(baseY, phase = 0) {
+    return baseY - 4 - Math.sin(performance.now() * 0.0038 + phase) * 2.2;
+}
+
+function drawMenuPipePath(points) {
+    if (!points || points.length < 2) return;
+
+    const path = () => {
+        ctx.beginPath();
+        ctx.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i][0], points[i][1]);
+        }
+    };
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    path();
+    ctx.strokeStyle = "rgb(18, 24, 34)";
+    ctx.lineWidth = 20;
+    ctx.stroke();
+
+    path();
+    ctx.strokeStyle = "rgb(88, 98, 112)";
+    ctx.lineWidth = 15;
+    ctx.stroke();
+
+    path();
+    ctx.strokeStyle = "rgb(155, 165, 178)";
+    ctx.lineWidth = 9;
+    ctx.stroke();
+
+    path();
+    ctx.strokeStyle = "rgb(215, 225, 235)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function drawMenuPipeJoint(x, y, r = 10) {
+    ctx.save();
+    drawCircle(x, y, r + 3, "rgb(18, 24, 34)");
+    drawCircle(x, y, r, "rgb(105, 115, 128)");
+    drawCircle(x, y, r - 3, "rgb(190, 200, 212)");
+    drawCircle(x - 2, y - 2, 2, "rgb(235, 242, 248)");
+    ctx.restore();
+}
+
+function bezierPoint(p0, p1, p2, t) {
+    const u = 1 - t;
+    return {
+        x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x,
+        y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y
+    };
+}
+
+function drawMenuRope(p0, p1, p2) {
+    ctx.save();
+    ctx.lineCap = "round";
+
+    const path = () => {
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+    };
+
+    path();
+    ctx.strokeStyle = "rgba(5, 8, 15, 0.95)";
+    ctx.lineWidth = 13;
+    ctx.stroke();
+
+    path();
+    ctx.strokeStyle = "rgb(82, 90, 103)";
+    ctx.lineWidth = 9;
+    ctx.stroke();
+
+    path();
+    ctx.strokeStyle = "rgb(175, 185, 198)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    path();
+    ctx.strokeStyle = "rgba(235, 242, 250, 0.75)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        const pt = bezierPoint(p0, p1, p2, t);
+        const before = bezierPoint(p0, p1, p2, Math.max(0, t - 0.01));
+        const after = bezierPoint(p0, p1, p2, Math.min(1, t + 0.01));
+        const angle = Math.atan2(after.y - before.y, after.x - before.x);
+
+        ctx.save();
+        ctx.translate(pt.x, pt.y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 7, 3.2, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgb(225, 232, 240)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    ctx.restore();
+}
+
+function drawMenuRocket(x, y, scale, angle) {
+    const now = performance.now();
+    const pulse = 1 + Math.sin(now * 0.012) * 0.08;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+
+    const flameLen = 42 + Math.sin(now * 0.018) * 8;
+    const flameW = 13 + Math.sin(now * 0.022 + 1.5) * 3;
+
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    drawCircle(0, 48 * scale, 18 * scale, ORANGE);
+    ctx.globalAlpha = 0.13;
+    drawCircle(0, 55 * scale, 24 * scale, YELLOW);
+    ctx.restore();
+
+    ctx.save();
+    ctx.scale(scale * pulse, scale * pulse);
+
+    drawPolygon([
+        [-flameW, 29],
+        [flameW, 29],
+        [flameW * 0.48, 29 + flameLen * 0.72],
+        [flameW * 0.16, 29 + flameLen],
+        [0, 29 + flameLen * 0.70],
+        [-flameW * 0.22, 29 + flameLen * 0.96],
+        [-flameW * 0.52, 29 + flameLen * 0.62]
+    ], RED);
+
+    drawPolygon([
+        [-flameW * 0.70, 29],
+        [flameW * 0.70, 29],
+        [flameW * 0.32, 29 + flameLen * 0.64],
+        [0, 29 + flameLen * 0.84],
+        [-flameW * 0.28, 29 + flameLen * 0.55]
+    ], ORANGE);
+
+    drawPolygon([
+        [-flameW * 0.38, 29],
+        [flameW * 0.38, 29],
+        [flameW * 0.15, 29 + flameLen * 0.48],
+        [0, 29 + flameLen * 0.66],
+        [-flameW * 0.16, 29 + flameLen * 0.45]
+    ], YELLOW);
+
+    drawCircle(-flameW * 0.95, 42 + flameLen * 0.45, 2.2, YELLOW);
+    drawCircle(flameW * 0.95, 38 + flameLen * 0.62, 1.8, ORANGE);
+    drawCircle(flameW * 0.35, 47 + flameLen * 0.86, 1.5, WHITE);
+
+    ctx.restore();
+
+    drawRocketVisual(ctx, 0, 0, selected_rocket, scale);
+    ctx.restore();
+}
+
+function draw_menu() {
+    const now = performance.now();
+
+    let sx = 50, sy = 45;
+    let star_points = [
+        [sx, sy-12], [sx+4, sy-4], [sx+12, sy-3], [sx+6, sy+3], [sx+8, sy+11], [sx, sy+7], [sx-8, sy+11], [sx-6, sy+3], [sx-12, sy-3], [sx-4, sy-4]
+    ];
+    drawPolygon(star_points, NEON_YELLOW_DARK, 5); drawPolygon(star_points, NEON_YELLOW, 2);
+    drawText(`${best_score}`, FONT, NEON_YELLOW, sx + 50, sy);
+
+    let cx = WIDTH - 150, cy = 45;
+    drawCircle(cx, cy, 16, NEON_YELLOW_DARK, 5); drawCircle(cx, cy, 14, NEON_YELLOW, 2); drawLine(cx, cy-8, cx, cy+8, NEON_YELLOW, 2);
+    drawText(`${total_coins}`, FONT, NEON_YELLOW, cx + 50, cy);
+
+    menu_music_btn_rect = [WIDTH - 55, 30, 40, 30];
+    let mm_col = music_enabled ? "rgb(20, 50, 30)" : "rgb(50, 20, 20)";
+    let mm_border = music_enabled ? GREEN : RED;
+    drawRect(menu_music_btn_rect, mm_col, 0, 8);
+    drawRect(menu_music_btn_rect, mm_border, 2, 8);
+    drawText(music_enabled ? "🎵" : "🔇", FONT_SMALL, WHITE, menu_music_btn_rect[0] + 20, menu_music_btn_rect[1] + 15);
+
+    let title_y = 160;
+    drawText("FLY", FONT_HUGE, NEON_CYAN_DARK, WIDTH / 2, title_y + 4);
+    drawText("FLY", FONT_HUGE, NEON_CYAN, WIDTH / 2, title_y);
+    drawText("HIGH", FONT_HUGE, NEON_PINK_DARK, WIDTH / 2, title_y + 74);
+    drawText("HIGH", FONT_HUGE, NEON_PINK, WIDTH / 2, title_y + 70);
+
+    let start_w = 260, start_h = 80, start_x = WIDTH / 2 - start_w / 2;
+    let start_y = menuLift(450, 0);
+
+    let shop_w = 125, shop_h = 50, shop_x = WIDTH / 2 - 130;
+    let mission_w = 125, mission_h = 50, mission_x = WIDTH / 2 + 5;
+    let shop_y = menuLift(570, 0.8);
+    let mission_y = menuLift(570, 1.7);
+
+    start_btn_rect = [start_x, start_y, start_w, start_h];
+    shop_btn_rect = [shop_x, shop_y, shop_w, shop_h];
+    mission_btn_rect = [mission_x, mission_y, mission_w, mission_h];
+
+    const startBottom = start_y + start_h - 4;
+    const shopCenterX = shop_x + shop_w / 2;
+    const missionCenterX = mission_x + mission_w / 2;
+    const lowerCenterY = shop_y + shop_h / 2;
+
+    drawMenuPipePath([
+        [start_x + 70, startBottom],
+        [start_x + 70, startBottom + 38],
+        [shopCenterX, shop_y - 5]
+    ]);
+
+    drawMenuPipePath([
+        [start_x + start_w - 70, startBottom],
+        [start_x + start_w - 70, startBottom + 38],
+        [missionCenterX, mission_y - 5]
+    ]);
+
+    drawMenuPipePath([
+        [shop_x + shop_w - 4, lowerCenterY],
+        [WIDTH / 2, lowerCenterY],
+        [mission_x + 4, lowerCenterY]
+    ]);
+
+    drawMenuPipeJoint(start_x + 70, startBottom, 8);
+    drawMenuPipeJoint(start_x + start_w - 70, startBottom, 8);
+    drawMenuPipeJoint(shopCenterX, shop_y - 5, 7);
+    drawMenuPipeJoint(missionCenterX, mission_y - 5, 7);
+    drawMenuPipeJoint(WIDTH / 2, lowerCenterY, 7);
+
+    const rocketAngle = -0.43 + Math.sin(now * 0.006) * 0.075 + Math.sin(now * 0.013) * 0.025;
+    const rocketX = 112 + Math.sin(now * 0.004) * 2.5;
+    const rocketY = 390 - Math.abs(Math.sin(now * 0.003)) * 3;
+
+    const localNozzleOffset = 4; 
+    const ropeStart = {
+        x: rocketX + Math.sin(rocketAngle) * localNozzleOffset,
+        y: rocketY + Math.cos(rocketAngle) * localNozzleOffset
+    };
+    const ropeEnd = {
+        x: start_x + 48,
+        y: start_y + 10
+    };
+    const ropeMid = {
+        x: (ropeStart.x + ropeEnd.x) / 2 + 4,
+        y: (ropeStart.y + ropeEnd.y) / 2 + 20 + Math.sin(now * 0.006) * 10
+    };
+
+    drawMenuRope(ropeStart, ropeMid, ropeEnd);
+
+    drawCircle(ropeEnd.x, ropeEnd.y, 7, "rgb(35, 43, 55)");
+    drawCircle(ropeEnd.x, ropeEnd.y, 4, "rgb(190, 200, 212)");
+
+    drawMenuRocket(rocketX, rocketY, 0.78, rocketAngle);
+
+    drawRect(start_btn_rect, "rgb(0, 20, 30)", 0, 25);
+    drawRect(start_btn_rect, NEON_CYAN_DARK, 6, 25);
+    drawRect(start_btn_rect, NEON_CYAN, 2, 25);
+    drawText("START", FONT_BIG, NEON_CYAN_DARK, start_x + start_w/2, start_y + start_h/2 + 3);
+    drawText("START", FONT_BIG, "rgb(200, 255, 255)", start_x + start_w/2, start_y + start_h/2);
+
+    drawRect(shop_btn_rect, "rgb(30, 0, 20)", 0, 15);
+    drawRect(shop_btn_rect, NEON_PINK_DARK, 5, 15);
+    drawRect(shop_btn_rect, NEON_PINK, 2, 15);
+    drawText("🛒 SHOP", FONT_SMALL, "rgb(255, 200, 230)", shop_x + shop_w/2, shop_y + shop_h/2);
+
+    drawRect(mission_btn_rect, "rgb(0, 25, 35)", 0, 15);
+    drawRect(mission_btn_rect, NEON_CYAN_DARK, 5, 15);
+    drawRect(mission_btn_rect, NEON_CYAN, 2, 15);
+    drawText("📋 MISSIONS", FONT_SMALL, "rgb(200, 255, 255)", mission_x + mission_w/2, mission_y + mission_h/2);
+}
+
+
+function draw_missions() {
+    drawText("MISSIONS & ACHIEVEMENTS", FONT, YELLOW, WIDTH / 2, 70);
+
+    let y_pos = 130;
+    let icons = ["🪨", "⚡", "🔥", "🌌"];
+    
+    for (let i = 0; i < missions.length; i++) {
+        let m = missions[i];
+        let is_done = m.done;
+        
+        drawRect([30, y_pos, WIDTH - 60, 100], PANEL, 0, 15);
+        drawRect([30, y_pos, WIDTH - 60, 100], is_done ? "rgb(50, 200, 50)" : "rgb(80, 100, 170)", 2, 15);
+        
+        drawText(`${icons[i]} ${m.text}`, FONT_SMALL, WHITE, 50, y_pos + 25, 1.0, "left");
+        
+        let cur = Math.floor(m.current);
+        if (cur > m.target) cur = m.target;
+        
+        drawText(`${cur} / ${m.target}`, FONT, is_done ? GREEN : WHITE, 50, y_pos + 60, 1.0, "left");
+        
+        let bar_w = WIDTH - 180;
+        drawRect([50, y_pos + 80, bar_w, 6], "rgb(50, 50, 50)", 0, 3);
+        drawRect([50, y_pos + 80, bar_w * (cur/m.target), 6], is_done ? GREEN : ORANGE, 0, 3);
+        
+        if (is_done) {
+            drawText("✓ CLAIMED", FONT_SMALL, GREEN, WIDTH - 40, y_pos + 60, 1.0, "right");
+        } else {
+            drawText(`+${m.reward} 🪙`, FONT_SMALL, YELLOW, WIDTH - 40, y_pos + 60, 1.0, "right");
+        }
+        
+        y_pos += 120;
+    }
+
+    back_btn_rect = [95, HEIGHT - 75, WIDTH - 190, 50];
+    drawRect(back_btn_rect, "rgb(30, 10, 20)", 0, 16); drawRect(back_btn_rect, "rgb(150, 40, 70)", 2, 16);
+    drawText("GO BACK", FONT, "rgb(255, 150, 180)", back_btn_rect[0] + back_btn_rect[2]/2, back_btn_rect[1] + back_btn_rect[3]/2);
+}
+
+function draw_shop() {
+    drawText("UPGRADE & ROCKET SHOP", FONT, CYAN, WIDTH / 2, 50);
+    drawText(`Coins: ${total_coins} 🪙`, FONT, YELLOW, WIDTH / 2, 90);
+
+    tab_upgrades_rect = [WIDTH / 2 - 150, 120, 145, 38];
+    tab_rockets_rect = [WIDTH / 2 + 5, 120, 145, 38];
+
+    let up_col = shop_tab === "upgrades" ? CYAN : "rgb(40, 50, 70)";
+    let up_txt = shop_tab === "upgrades" ? "rgb(0, 0, 0)" : WHITE;
+    drawRect(tab_upgrades_rect, up_col, 0, 10);
+    drawText("UPGRADES", FONT_SMALL, up_txt, tab_upgrades_rect[0] + tab_upgrades_rect[2]/2, tab_upgrades_rect[1] + tab_upgrades_rect[3]/2);
+
+    let roc_col = shop_tab === "rockets" ? CYAN : "rgb(40, 50, 70)";
+    let roc_txt = shop_tab === "rockets" ? "rgb(0, 0, 0)" : WHITE;
+    drawRect(tab_rockets_rect, roc_col, 0, 10);
+    drawText("ROCKETS", FONT_SMALL, roc_txt, tab_rockets_rect[0] + tab_rockets_rect[2]/2, tab_rockets_rect[1] + tab_rockets_rect[3]/2);
+
+    if (shop_tab === "upgrades") {
+        let y_pos = 180;
+        for (let name in upgrades) {
+            let data = upgrades[name];
+            drawRect([30, y_pos, WIDTH - 60, 70], PANEL, 0, 12);
+            drawRect([30, y_pos, WIDTH - 60, 70], "rgb(80, 100, 170)", 2, 12);
+            
+            let lvl_str = data.level < data.max ? `LVL ${data.level}/${data.max}` : "MAX";
+            let cost_str = data.level < data.max ? `${data.cost} 🪙` : "---";
+            
+            drawText(`${name}`, FONT, WHITE, 130, y_pos + 22);
+            drawText(lvl_str, FONT_SMALL, CYAN, 130, y_pos + 46);
+            
+            let btn_col = data.level < data.max && total_coins >= data.cost ? "rgb(50, 200, 50)" : "rgb(70, 70, 80)";
+            drawRect([WIDTH - 140, y_pos + 12, 105, 45], btn_col, 0, 10);
+            drawText(cost_str, FONT_SMALL, WHITE, WIDTH - 87, y_pos + 34);
+            
+            y_pos += 80;
+        }
+    } else {
+        rocket_btn_rects = {};
+        let i = 0;
+        for (let r_name in rockets) {
+            let r_data = rockets[r_name];
+            
+            let col = i % 2;
+            let row = Math.floor(i / 2);
+            
+            let cx = 40 + col * 205; 
+            let cy = 170 + row * 195; 
+            let cw = 195;
+            let ch = 185;
+            
+            drawRect([cx, cy, cw, ch], PANEL, 0, 12);
+            let border_c = selected_rocket === r_name ? GREEN : (r_data.unlocked ? "rgb(80, 100, 170)" : "rgb(70, 70, 80)");
+            drawRect([cx, cy, cw, ch], border_c, 2, 12);
+            
+            drawRocketVisual(ctx, cx + cw/2, cy + 55, r_name, 1.2);
+            
+            if(r_data.desc) drawText(r_data.desc, "13px Arial", "rgb(150, 200, 255)", cx + cw/2, cy + 115);
+            
+            let status_str = selected_rocket === r_name ? "EQUIPPED" : (r_data.unlocked ? "EQUIP" : `${r_data.cost} 🪙`);
+            let btn_col = selected_rocket === r_name ? "rgb(40, 120, 200)" : (r_data.unlocked ? "rgb(50, 200, 50)" : (total_coins >= r_data.cost ? "rgb(50, 180, 50)" : "rgb(70, 70, 80)"));
+            
+            let bw = 120, bh = 35;
+            let bx = cx + (cw - bw)/2;
+            let by = cy + 135;
+            
+            let r_rect = [bx, by, bw, bh];
+            rocket_btn_rects[r_name] = r_rect;
+            
+            drawRect(r_rect, btn_col, 0, 8);
+            drawText(status_str, FONT_SMALL, WHITE, bx + bw/2, by + bh/2);
+            
+            i++;
+        }
+    }
+
+    back_btn_rect = [95, HEIGHT - 75, WIDTH - 190, 50];
+    drawRect(back_btn_rect, "rgb(30, 10, 20)", 0, 16); drawRect(back_btn_rect, "rgb(150, 40, 70)", 2, 16);
+    drawText("GO BACK", FONT, "rgb(255, 150, 180)", back_btn_rect[0] + back_btn_rect[2]/2, back_btn_rect[1] + back_btn_rect[3]/2);
+}
+
+function draw_revive_screen() {
+    if (gameoverScreenData) ctx.putImageData(gameoverScreenData, 0, 0);
+    else drawBackgroundGradient();
+        
+    let elapsed = performance.now() - death_clock;
+    let alpha_val = Math.min(170, Math.floor(elapsed * 0.3)) / 255;
+    
+    ctx.save();
+    ctx.globalAlpha = alpha_val;
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.restore();
+    
+    drawText("GAME OVER", FONT_BIG, RED, WIDTH / 2, HEIGHT / 2 - 110);
+    
+    let bw = 260, bh = 55, bx = WIDTH / 2 - bw / 2, revive_y = HEIGHT / 2 - 25;
+    revive_btn_rect = [bx, revive_y, bw, bh];
+    
+    if (revive_count < 2) {
+        let revive_cost = 150;
+        let can_afford = (total_coins + run_coins) >= revive_cost;
+        let btn_col = can_afford ? "rgb(10, 40, 20)" : "rgb(30, 30, 35)";
+        let border_col = can_afford ? GREEN : "rgb(100, 100, 110)";
+        let text_col = can_afford ? "rgb(100, 255, 150)" : "rgb(150, 150, 160)";
+        
+        drawRect(revive_btn_rect, btn_col, 0, 14); drawRect(revive_btn_rect, border_col, 2, 14);
+        drawText("REVIVE (150 🪙)", FONT, text_col, bx + bw/2, revive_y + bh/2);
+    }
+    
+    quit_btn_rect = [WIDTH / 2 - 60, HEIGHT - 110, 120, 40];
+    drawText("Give Up", FONT, "rgb(170, 170, 180)", WIDTH / 2, HEIGHT - 100);
+}
+
+function draw_gameover() {
+    drawRect([30, 130, WIDTH - 60, 550], "rgb(8, 10, 28)", 0, 28);
+    drawRect([30, 130, WIDTH - 60, 550], "rgb(80, 100, 170)", 2, 28);
+    
+    drawText("GAME OVER", FONT_BIG, RED, WIDTH / 2, 175);
+    drawText(`${player.score}`, FONT_HUGE, WHITE, WIDTH / 2, 245);
+    drawText("SCORE", FONT_SMALL, CYAN, WIDTH / 2, 290);
+    drawText(`BEST  ${best_score}`, FONT, YELLOW, WIDTH / 2, 345);
+    drawText(`MAX COMBO  x${player.max_combo}`, FONT, ORANGE, WIDTH / 2, 390);
+    drawText(`LEVEL ${player.level}`, FONT, WHITE, WIDTH / 2, 435);
+    drawText(`COINS EARNED: +${run_coins} 🪙`, FONT, YELLOW, WIDTH / 2, 480);
+    
+    restart_btn_rect = [95, 510, WIDTH - 190, 45];
+    shop_over_btn_rect = [95, 565, WIDTH - 190, 45];
+    menu_btn_rect = [95, 620, WIDTH - 190, 45];
+    
+    drawRect(restart_btn_rect, "rgb(0, 25, 35)", 0, 14); drawRect(restart_btn_rect, CYAN, 2, 14); drawText("PLAY AGAIN", FONT, CYAN, restart_btn_rect[0] + restart_btn_rect[2]/2, restart_btn_rect[1] + restart_btn_rect[3]/2);
+    drawRect(shop_over_btn_rect, "rgb(30, 10, 40)", 0, 14); drawRect(shop_over_btn_rect, PURPLE, 2, 14); drawText("🛒 SHOP", FONT, PURPLE, shop_over_btn_rect[0] + shop_over_btn_rect[2]/2, shop_over_btn_rect[1] + shop_over_btn_rect[3]/2);
+    drawRect(menu_btn_rect, "rgb(20, 25, 40)", 0, 14); drawRect(menu_btn_rect, "rgb(120, 140, 180)", 2, 14); drawText("MAIN MENU", FONT, "rgb(200, 220, 255)", menu_btn_rect[0] + menu_btn_rect[2]/2, menu_btn_rect[1] + menu_btn_rect[3]/2);
+}
+
+function draw_pause_menu() {
+    if (pausedScreenData) ctx.putImageData(pausedScreenData, 0, 0);
+    else drawBackgroundGradient();
+        
+    ctx.save(); ctx.globalAlpha = 160 / 255; ctx.fillStyle = "rgb(0, 0, 0)"; ctx.fillRect(0, 0, WIDTH, HEIGHT); ctx.restore();
+    
+    let box_rect = [40, HEIGHT / 2 - 200, WIDTH - 80, 360];
+    drawRect(box_rect, "rgb(13, 19, 42)", 0, 24); drawRect(box_rect, CYAN, 2, 24);
+    drawText("GAME PAUSED", FONT, CYAN, WIDTH / 2, box_rect[1] + 40);
+    
+    pause_resume_rect = [WIDTH / 2 - 140, box_rect[1] + 90, 280, 45];
+    pause_restart_rect = [WIDTH / 2 - 140, box_rect[1] + 145, 280, 45];
+    pause_menu_rect = [WIDTH / 2 - 140, box_rect[1] + 200, 280, 45];
+    
+    drawRect(pause_resume_rect, "rgb(0, 25, 35)", 0, 12); drawRect(pause_resume_rect, CYAN, 2, 12); drawText("RESUME", FONT, CYAN, pause_resume_rect[0]+140, pause_resume_rect[1]+22.5);
+    drawRect(pause_restart_rect, "rgb(35, 25, 0)", 0, 12); drawRect(pause_restart_rect, YELLOW, 2, 12); drawText("RETRY", FONT, YELLOW, pause_restart_rect[0]+140, pause_restart_rect[1]+22.5);
+    drawRect(pause_menu_rect, "rgb(40, 10, 20)", 0, 12); drawRect(pause_menu_rect, RED, 2, 12); drawText("MAIN MENU", FONT, "rgb(255, 150, 160)", pause_menu_rect[0]+140, pause_menu_rect[1]+22.5);
+    
+    music_icon_rect = [WIDTH / 2 - 65, box_rect[1] + 270, 50, 50];
+    vibe_icon_rect = [WIDTH / 2 + 15, box_rect[1] + 270, 50, 50];
+    
+    let m_col = music_enabled ? "rgb(20, 50, 30)" : "rgb(50, 20, 20)"; let m_border = music_enabled ? GREEN : RED;
+    drawRect(music_icon_rect, m_col, 0, 12); drawRect(music_icon_rect, m_border, 2, 12); drawText(music_enabled ? "🎵" : "🔇", FONT_SMALL, WHITE, music_icon_rect[0]+25, music_icon_rect[1]+25);
+    
+    let v_col = vibration_enabled ? "rgb(20, 50, 30)" : "rgb(50, 20, 20)"; let v_border = vibration_enabled ? GREEN : RED;
+    drawRect(vibe_icon_rect, v_col, 0, 12); drawRect(vibe_icon_rect, v_border, 2, 12); drawText(vibration_enabled ? "📳" : "❌", FONT_SMALL, WHITE, vibe_icon_rect[0]+25, vibe_icon_rect[1]+25);
+}
+
+// --- COUNTDOWN SCREEN DRAW ---
+function draw_countdown() {
+    if (pausedScreenData) ctx.putImageData(pausedScreenData, 0, 0);
+    else drawBackgroundGradient();
+
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "rgb(0, 0, 0)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.restore();
+
+    let current_second = Math.ceil(countdown_timer / 60);
+    let display_text = current_second > 0 ? current_second : "GO!";
+
+    drawText(display_text, FONT_HUGE, CYAN, WIDTH / 2, HEIGHT / 2);
+}
+
+// -----------------------------
+// EVENT LISTENERS
+// -----------------------------
+canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    if (music_enabled && bgMusic && bgMusic.paused) {
+        bgMusic.play().catch(err => {});
+    }
+
+    if (game_state === "menu") {
+        if (collidePoint(menu_music_btn_rect, mx, my)) {
+            playClickSound();
+            music_enabled = !music_enabled;
+            if (music_enabled) {
+                if (bgMusic) bgMusic.play().catch(e=>{});
+            } else {
+                if (bgMusic) bgMusic.pause();
+                if (laserMusic) laserMusic.pause();
+            }
+        } else if (collidePoint(start_btn_rect, mx, my)) {
+            playClickSound();
+            start_game();
+        } else if (collidePoint(shop_btn_rect, mx, my)) {
+            playClickSound();
+            shop_return_state = "menu"; game_state = "shop";
+        } else if (collidePoint(mission_btn_rect, mx, my)) {
+            playClickSound();
+            game_state = "missions";
+        }
+    } else if (game_state === "shop") {
+        if (collidePoint(tab_upgrades_rect, mx, my)) { playClickSound(); shop_tab = "upgrades"; }
+        else if (collidePoint(tab_rockets_rect, mx, my)) { playClickSound(); shop_tab = "rockets"; }
+        
+        if (shop_tab === "upgrades") {
+            let y_pos = 180;
+            for (let name in upgrades) {
+                let data = upgrades[name];
+                if (mx >= WIDTH - 140 && mx <= WIDTH - 35 && my >= y_pos + 12 && my <= y_pos + 57) {
+                    if (data.level < data.max && total_coins >= data.cost) {
+                        playClickSound();
+                        total_coins -= data.cost; data.level += 1; data.cost = Math.floor(data.cost * 1.5);
+                        saveGame(); 
+                    }
+                }
+                y_pos += 80;
+            }
+        } else {
+            for (let r_name in rocket_btn_rects) {
+                if (collidePoint(rocket_btn_rects[r_name], mx, my)) {
+                    if (rockets[r_name].unlocked) {
+                        playClickSound();
+                        selected_rocket = r_name;
+                        saveGame(); 
+                    } else if (total_coins >= rockets[r_name].cost) { 
+                        playClickSound();
+                        total_coins -= rockets[r_name].cost; 
+                        rockets[r_name].unlocked = true; 
+                        selected_rocket = r_name; 
+                        saveGame(); 
+                    }
+                }
+            }
+        }
+        if (collidePoint(back_btn_rect, mx, my)) { playClickSound(); game_state = shop_return_state; }
+
+    } else if (game_state === "missions") {
+        if (collidePoint(back_btn_rect, mx, my)) { playClickSound(); game_state = "menu"; }
+    } else if (game_state === "revive_screen") {
+        if (revive_count < 2 && collidePoint(revive_btn_rect, mx, my)) {
+            playClickSound();
+            let revive_cost = 150;
+            if ((total_coins + run_coins) >= revive_cost) {
+                if (run_coins >= revive_cost) run_coins -= revive_cost;
+                else { let remainder = revive_cost - run_coins; run_coins = 0; total_coins -= remainder; }
+                revive_count++; player.hp = 1; player.invuln = 120; game_state = "playing";
+                saveGame(); 
+                floating_texts.push(new FloatingText(WIDTH/2, HEIGHT/2, "REVIVED!", GREEN, 60, FONT_BIG));
+            }
+        } else if (collidePoint(quit_btn_rect, mx, my)) { playClickSound(); game_state = "gameover"; }
+        
+    } else if (game_state === "gameover") {
+        if (collidePoint(restart_btn_rect, mx, my)) { playClickSound(); start_game(); }
+        else if (collidePoint(shop_over_btn_rect, mx, my)) { playClickSound(); shop_return_state = "gameover"; game_state = "shop"; }
+        else if (collidePoint(menu_btn_rect, mx, my)) { playClickSound(); game_state = "menu"; }
+
+    } else if (game_state === "paused") {
+        if (collidePoint(pause_resume_rect, mx, my)) {
+            playClickSound();
+            countdown_timer = 180; 
+            game_state = "countdown"; 
+        }
+        else if (collidePoint(pause_restart_rect, mx, my)) {
+            playClickSound();
+            if (laserMusic && !laserMusic.paused) { laserMusic.pause(); laserMusic.currentTime = 0; }
+            start_game();
+        }
+        else if (collidePoint(pause_menu_rect, mx, my)) {
+            playClickSound();
+            if (laserMusic && !laserMusic.paused) { laserMusic.pause(); laserMusic.currentTime = 0; }
+            game_state = "menu";
+        }
+        else if (collidePoint(music_icon_rect, mx, my)) {
+            playClickSound();
+            music_enabled = !music_enabled;
+            if (music_enabled) {
+                if (bgMusic) bgMusic.play().catch(e=>{});
+            } else {
+                if (bgMusic) bgMusic.pause();
+                if (laserMusic) laserMusic.pause();
+            }
+        }
+        else if (collidePoint(vibe_icon_rect, mx, my)) { playClickSound(); vibration_enabled = !vibration_enabled; }
+        
+    } else if (game_state === "playing" || game_state === "boss_fight") {
+        if (collidePoint(pause_btn_rect, mx, my)) {
+            playClickSound();
+            pausedScreenData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            game_state = "paused";
+            if (laserMusic && !laserMusic.paused) laserMusic.pause();
+        } else {
+            player.change_direction();
+        }
+    }
+});
+
+// -----------------------------
+// MAIN LOOP
+// -----------------------------
+function updateAndDraw() {
+    drawBackgroundGradient();
+    
+    let current_shake_x = 0;
+    let current_shake_y = 0;
+
+    if (game_state === "menu") {
+        update_stars(0.55); 
+        draw_stars();
+        draw_menu();
+    } else if (game_state === "shop") {
+        update_stars(0.3); 
+        draw_stars();
+        draw_shop();
+    } else if (game_state === "missions") {
+        update_stars(0.3); 
+        draw_stars();
+        draw_missions();
+    } else if (game_state === "countdown") {
+        countdown_timer--;
+        if (countdown_timer <= 0) {
+            game_state = "playing";
+            if (music_enabled && player.laser_timer > 0 && laserMusic) laserMusic.play().catch(e=>{});
+        }
+        draw_countdown();
+    } else if (game_state === "playing") {
+        if (screen_shake > 0) { current_shake_x = randint(-8, 8); current_shake_y = randint(-8, 8); }
+        ctx.save(); ctx.translate(current_shake_x, current_shake_y);
+
+        if (bg_flash > 0) {
+            ctx.fillStyle = bg_flash % 2 === 0 ? WHITE : YELLOW;
+            ctx.globalAlpha = Math.min(255, bg_flash * 8) / 255;
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            ctx.globalAlpha = 1.0;
+            bg_flash--;
+        }
+        
+        update_stars(2.5); player.update();
+        for (let i = shockwaves.length - 1; i >= 0; i--) { shockwaves[i].update(); if (!shockwaves[i].active) shockwaves.splice(i, 1); }
+        
+        survival_timer++;
+        if (survival_timer >= 15) { player.score++; survival_timer = 0; }
+        
+        run_time_seconds += 1 / 60; 
+        missions[3].current = Math.max(missions[3].current, run_time_seconds);
+        check_missions();
+
+        if (!boss && run_time_seconds >= next_boss_time) {
+            game_state = "boss_fight"; boss = new Boss(player.level); boss_bullets = []; enemies = []; meteors = [];
+            next_boss_time += BOSS_INTERVAL_SECONDS;
+            floating_texts.push(new FloatingText(WIDTH/2, HEIGHT/2, "WARNING: BOSS INCOMING!", RED, 90, FONT_BIG));
+        }
+        
+        level_timer++;
+        if (level_timer >= FPS * 30) {
+            player.level++; burst(WIDTH/2, HEIGHT/2, CYAN, 50);
+            floating_texts.push(new FloatingText(WIDTH/2, HEIGHT/2, `LEVEL ${player.level}!`, CYAN, 70, FONT_BIG));
+            level_timer = 0;
+        }
+
+        let diff_lvl = Math.min(player.level, 6);
+        let enemy_delay = Math.max(15, 70 - diff_lvl * 5);
+        spawn_timer++; if (spawn_timer >= enemy_delay) { enemies.push(new Enemy(diff_lvl)); if (diff_lvl >= 4) enemies.push(new Enemy(diff_lvl)); spawn_timer = 0; }
+            
+        let meteor_delay = Math.max(25, 110 - diff_lvl * 8);
+        meteor_timer++; if (meteor_timer >= meteor_delay) { meteors.push(new Meteor(player.level)); if (player.level >= 5) meteors.push(new Meteor(player.level)); meteor_timer = 0; }
+            
+        powerup_timer++; if (powerup_timer >= powerup_delay) { powerups.push(new PowerUp()); powerup_timer = 0; powerup_delay = player.level >= 8 ? randint(800, 1200) : Math.max(150, randint(250, 450) - player.level * 5); }
+        laser_timer_spawn++; if (laser_timer_spawn >= laser_delay) { laser_items.push(new LaserItem()); laser_timer_spawn = 0; laser_delay = player.level >= 8 ? randint(1500, 2000) : Math.max(450, randint(700, 1100) - player.level * 10); }
+        health_timer_spawn++; if (health_timer_spawn >= health_delay) { health_items.push(new HealthItem()); health_timer_spawn = 0; health_delay = randint(700, 1200); }
+
+        if (player.level > 2) {
+            shield_timer_spawn++; if (shield_timer_spawn >= shield_delay) { shield_items.push(new ShieldItem()); shield_timer_spawn = 0; let s_reduction = diff_lvl >= 3 ? (diff_lvl * 80) : 0; shield_delay = Math.max(300, randint(800, 1300) - s_reduction); }
+            bomb_timer_spawn++; if (bomb_timer_spawn >= bomb_delay) { bomb_items.push(new BombItem()); bomb_timer_spawn = 0; let b_reduction = diff_lvl >= 3 ? (diff_lvl * 100) : 0; bomb_delay = Math.max(450, randint(1200, 1800) - b_reduction); }
+        }
+        coin_timer_spawn++; if (coin_timer_spawn >= coin_delay) { coin_items.push(new CoinItem()); coin_timer_spawn = 0; coin_delay = randint(200, 400); }
+
+        for (let b of bullets) b.update(); for (let e of enemies) e.update(); for (let m of meteors) m.update();
+        for (let p of powerups) p.update(); for (let l of laser_items) l.update(); for (let h of health_items) h.update();
+        for (let s of shield_items) s.update(); for (let bm of bomb_items) bm.update(); for (let c of coin_items) c.update();
+        for (let ft of floating_texts) ft.update();
+
+        handle_collisions(); update_particles();
+
+        draw_stars();
+        for (let sw of shockwaves) sw.draw();
+        
+        if (player.laser_timer > 0) {
+            drawRect([player.x - 14, 0, 28, player.y], CYAN); drawRect([player.x - 6, 0, 12, player.y], WHITE);
+        }
+        
+        for (let p of powerups) p.draw(); for (let l of laser_items) l.draw(); for (let h of health_items) h.draw();
+        for (let s of shield_items) s.draw(); for (let bm of bomb_items) bm.draw(); for (let c of coin_items) c.draw();
+        for (let b of bullets) b.draw(); for (let e of enemies) e.draw(); for (let m of meteors) m.draw();
+        draw_particles(); player.draw(); draw_hud();
+        for (let ft of floating_texts) ft.draw();
+        
+        ctx.restore();
+        if (screen_shake > 0) screen_shake--;
+        
+    } else if (game_state === "boss_fight") {
+        if (screen_shake > 0) { current_shake_x = randint(-8, 8); current_shake_y = randint(-8, 8); }
+        ctx.save(); ctx.translate(current_shake_x, current_shake_y);
+
+        update_stars(1.0); player.update();
+        if (boss) { boss.update(); boss.draw(); }
+        for (let b of bullets) b.update();
+        
+        for (let i = boss_bullets.length - 1; i >= 0; i--) {
+            let bb = boss_bullets[i]; bb.update();
+            if (bb.y > HEIGHT + 20) { boss_bullets.splice(i, 1); continue; }
+            if (distance(player.x, player.y, bb.x, bb.y) < player.radius + bb.r) { boss_bullets.splice(i, 1); player.damage(); }
+        }
+        
+        for (let m of meteors) {
+            m.update();
+            if (distance(player.x, player.y, m.x, m.y) < player.radius + m.radius - 5) player.damage();
+        }
+        
+        handle_collisions();
+        for (let ft of floating_texts) ft.update();
+        update_particles();
+
+        draw_stars();
+        for (let b of bullets) b.draw(); for (let bb of boss_bullets) bb.draw(); for (let m of meteors) m.draw();
+        draw_particles(); player.draw(); draw_hud();
+        for (let ft of floating_texts) ft.draw();
+        
+        ctx.restore();
+        if (screen_shake > 0) screen_shake--;
+
+    } else if (game_state === "revive_screen") { 
+        draw_revive_screen(); 
+    } else if (game_state === "gameover") { 
+        update_stars(0.3);
+        draw_stars();
+        draw_gameover(); 
+    } else if (game_state === "paused") { 
+        draw_pause_menu(); 
+    }
+}
+
+let lastTime = performance.now();
+const fpsInterval = 1000 / 60;
+
+function gameLoop(timestamp) {
+    requestAnimationFrame(gameLoop);
+    
+    let dt = timestamp - lastTime;
+    
+    if (dt >= fpsInterval) {
+        lastTime = timestamp - (dt % fpsInterval);
+        updateAndDraw();
+    }
+}
+
+requestAnimationFrame(gameLoop);
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js");
+}
+</script>
+
+</body>
+</html>
